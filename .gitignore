@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.env
+.venv
+env.bak/
+venv.bak/
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Project AEGIS Specific (Sensitive Data)
+*.sqlite
+*.db
+logs/
+backtest_results/
+.env
+config.json
+aegis_brain/memory.db
+mcp_wrapper/freqtrade-mcp/
+
+# IDEs
+.vscode/
+.idea/
