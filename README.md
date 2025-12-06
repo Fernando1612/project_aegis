@@ -12,10 +12,10 @@ graph TD
         subgraph Docker_Network [Internal Network: trading_net]
             Pilot[Freqtrade - The Pilot] -- "Executes Trades" --> Exchange((Exchange))
             Pilot -- "API" --> Bridge
-            Bridge[MCP Wrapper (Kukapay Freqtrade MCP)] -- "Exposes Tools" --> Strategist
-            Strategist[AEGIS Brain (The Strategist)] -- "MCP Client" --> Bridge
+            Bridge[MCP Wrapper - Kukapay Freqtrade MCP] -- "Exposes Tools" --> Strategist
+            Strategist[AEGIS Brain - The Strategist] -- "MCP Client" --> Bridge
             Strategist -- "Context" --> Gemini((Google Gemini))
-            Strategist -- "Store/Recall" --> Memory[(SQLite BankMemory)]
+            Strategist -- "Store/Recall" --> Memory[SQLite BankMemory]
         end
     end
 ```
