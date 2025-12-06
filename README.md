@@ -8,7 +8,7 @@ The system consists of three Docker containers running on an internal network, u
 
 ```mermaid
 graph TD
-    subgraph Hardware [Raspberry Pi 4 (8GB RAM)]
+    subgraph Hardware [Raspberry Pi 4 8GB RAM]
         subgraph Docker_Network [Internal Network: trading_net]
             Pilot[Freqtrade (The Pilot)] -- "Executes Trades" --> Exchange((Exchange))
             Pilot -- "API" --> Bridge
