@@ -12,6 +12,30 @@ tech_weight: 0.6
 # Weight given to macro analysis
 macro_weight: 0.4
 
+schedule:
+  # How often to run the analysis (in minutes)
+  analysis_interval_minutes: 15
+  # How often to run the evolution cycle (cron format)
+  evolution_cron: "0 2 * * 0" # Every Sunday at 02:00 UTC
+
+thresholds:
+  # Minimum confidence to execute a trade (0-100)
+  min_confidence: 75
+  # Risk tolerance (High, Medium, Low)
+  risk_tolerance: "Medium"
+
+war_room:
+  weights:
+    bull_agent: 0.4
+    bear_agent: 0.4
+    risk_agent: 0.2
+  
+  data_providers:
+    whale_alert:
+      min_transaction_value_usd: 1000000 # $1M
+    sentiment:
+      hype_threshold: 0.8 # Extreme Greed
+
 # Evolution Schedule
 # Day of week to run evolution (0=Monday, 6=Sunday)
 evolution_day: 6
@@ -23,3 +47,4 @@ evolution_hour: 2
 cycle_interval: 300
 # Time in seconds to wait on error
 error_interval: 60
+```

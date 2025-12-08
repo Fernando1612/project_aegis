@@ -6,7 +6,8 @@
 
 ## 1. Resumen de la Arquitectura
 
-El sistema consta de tres contenedores Docker que se ejecutan en una red interna, utilizando el **Kukapay Freqtrade MCP** como puente.
+### Arquitectura Actual (v2.2)
+El sistema actual opera con un solo agente estratega y un motor de evolución.
 
 ```mermaid
 graph TD
@@ -20,6 +21,38 @@ graph TD
             Strategist -- "Almacenar/Recordar" --> Memory[SQLite BankMemory]
             Strategist -- "Muta" --> PilotStrategy[Archivo de Estrategia]
         end
+    end
+```
+
+### Arquitectura Futura (Modo Bestia - En Desarrollo)
+El sistema está evolucionando hacia un motor de decisión Multi-Agente ("The War Room") con ingestión de datos externos.
+
+```mermaid
+graph TD
+    subgraph External_Data [Los Ojos]
+        Whale[Whale Watcher] -- "Flujos On-Chain" --> WarRoom
+        Social[Sentiment Sniper] -- "Puntuación de Hype" --> WarRoom
+        Market[Datos de Mercado] -- "Precio/Indicadores" --> WarRoom
+    end
+
+    subgraph The_War_Room [El Cerebro]
+        direction TB
+        Bull[Agente Alfa: El Toro]
+        Bear[Agente Beta: El Oso]
+        Risk[Agente Gamma: Juez de Riesgo]
+        
+        Whale & Social & Market --> Bull & Bear & Risk
+        
+        Bull -- "Voto" --> Voting[Mecanismo de Votación]
+        Bear -- "Voto" --> Voting
+        Risk -- "Voto" --> Voting
+        
+        Voting -- "Veredicto Final" --> Commander[Comandante Supremo]
+    end
+
+    subgraph Execution [El Músculo]
+        Commander -- "Largo/Corto/Mantener" --> Pilot[Freqtrade (Futuros)]
+        Commander -- "Cobertura de Emergencia" --> Shield[Escudo Delta Neutral]
     end
 ```
 

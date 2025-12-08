@@ -6,7 +6,8 @@
 
 ## 1. Architecture Overview
 
-The system consists of three Docker containers running on an internal network, utilizing the **Kukapay Freqtrade MCP** as the bridge.
+### Current Architecture (v2.2)
+The current system operates with a single strategist agent and an evolution engine.
 
 ```mermaid
 graph TD
@@ -20,6 +21,38 @@ graph TD
             Strategist -- "Store/Recall" --> Memory[SQLite BankMemory]
             Strategist -- "Mutates" --> PilotStrategy[Strategy File]
         end
+    end
+```
+
+### Future Architecture (Beast Mode - In Development)
+The system is evolving into a Multi-Agent decision engine ("The War Room") with external data ingestion.
+
+```mermaid
+graph TD
+    subgraph External_Data [The Eyes]
+        Whale[Whale Watcher] -- "On-Chain Flows" --> WarRoom
+        Social[Sentiment Sniper] -- "Hype Score" --> WarRoom
+        Market[Market Data] -- "Price/Indicators" --> WarRoom
+    end
+
+    subgraph The_War_Room [The Brain]
+        direction TB
+        Bull[Agent Alpha: The Bull]
+        Bear[Agent Beta: The Bear]
+        Risk[Agent Gamma: Risk Judge]
+        
+        Whale & Social & Market --> Bull & Bear & Risk
+        
+        Bull -- "Vote" --> Voting[Weighted Voting Mechanism]
+        Bear -- "Vote" --> Voting
+        Risk -- "Vote" --> Voting
+        
+        Voting -- "Final Verdict" --> Commander[Supreme Commander]
+    end
+
+    subgraph Execution [The Muscle]
+        Commander -- "Long/Short/Hold" --> Pilot[Freqtrade (Futures)]
+        Commander -- "Emergency Hedge" --> Shield[Delta Neutral Shield]
     end
 ```
 
