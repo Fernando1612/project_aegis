@@ -54,6 +54,8 @@ services:
       - trading_net
     volumes:
       - ./aegis_brain/memory.db:/app/memory.db
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./freqtrade/user_data:/freqtrade/user_data
     logging:
       driver: "json-file"
       options:

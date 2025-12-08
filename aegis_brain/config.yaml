@@ -1,0 +1,25 @@
+# AEGIS Brain Configuration
+
+# Trading Thresholds
+# Score required to trigger a BUY signal (0.0 to 1.0)
+buy_threshold: 0.6
+# Score required to trigger a SELL signal (-1.0 to 0.0)
+sell_threshold: -0.6
+
+# Decision Weights
+# Weight given to technical analysis (must sum to 1.0 with macro_weight)
+tech_weight: 0.6
+# Weight given to macro analysis
+macro_weight: 0.4
+
+# Evolution Schedule
+# Day of week to run evolution (0=Monday, 6=Sunday)
+evolution_day: 6
+# Hour of day to run evolution (0-23 UTC)
+evolution_hour: 2
+
+# System Settings
+# Time in seconds between cycles
+cycle_interval: 300
+# Time in seconds to wait on error
+error_interval: 60
