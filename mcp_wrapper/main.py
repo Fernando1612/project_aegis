@@ -12,9 +12,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-FREQTRADE_API_URL = os.getenv("FREQTRADE_API_URL", "http://freqtrade:8080")
+FREQTRADE_API_URL = os.getenv("FREQTRADE_API_URL", "http://127.0.0.1:8080")
 FREQTRADE_USERNAME = os.getenv("FREQTRADE_USERNAME", "freqtrader")
-FREQTRADE_PASSWORD = os.getenv("FREQTRADE_PASSWORD", "SuperSecretPassword")
+FREQTRADE_PASSWORD = os.getenv("FREQTRADE_PASSWORD", "maceda")
 
 # Global session
 session: ClientSession | None = None
