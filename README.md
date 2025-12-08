@@ -1,6 +1,6 @@
-# Project AEGIS: Hybrid Algorithmic Trading System (v2.1)
+# Project AEGIS: Hybrid Algorithmic Trading System (v2.2)
 
-**Project AEGIS** is a low-resource, high-autonomy trading system designed for the Raspberry Pi 4. It implements a "Pilot vs. Strategist" architecture where a deterministic trading bot (The Pilot) is guided by an LLM-powered risk manager (The Strategist).
+**Project AEGIS** is a low-resource, high-autonomy trading system designed for the Raspberry Pi 4. It implements a "Pilot vs. Strategist" architecture where a deterministic trading bot (The Pilot) is guided by an LLM-powered risk manager (The Strategist), and now features a self-evolving strategy engine ("Operation EVO").
 
 ## 1. Architecture Overview
 
@@ -12,24 +12,33 @@ graph TD
         subgraph Docker_Network [Internal Network: trading_net]
             Pilot[Freqtrade - The Pilot] -- "Executes Trades" --> Exchange((Exchange))
             Pilot -- "API" --> Bridge
-            Bridge[MCP Wrapper - Kukapay Freqtrade MCP] -- "Exposes Tools" --> Strategist
+            Bridge[MCP Wrapper - Kukapay Freqtrade MCP] -- "Exposes Tools (HTTP)" --> Strategist
             Strategist[AEGIS Brain - The Strategist] -- "MCP Client" --> Bridge
-            Strategist -- "Context" --> Gemini((Google Gemini))
+            Strategist -- "Context/Evolution" --> Gemini((Google Gemini))
             Strategist -- "Store/Recall" --> Memory[SQLite BankMemory]
+            Strategist -- "Mutates" --> PilotStrategy[Strategy File]
         end
     end
 ```
 
 ### Components
 1.  **The Pilot (Freqtrade):** Runs the `BBRSI_Optimized` strategy. It handles the minute-by-minute execution of trades.
-2.  **The Bridge (MCP Wrapper):** A containerized version of [kukapay/freqtrade-mcp](https://github.com/kukapay/freqtrade-mcp). It exposes Freqtrade's API as Model Context Protocol (MCP) tools.
+2.  **The Bridge (MCP Wrapper):** A containerized FastAPI application acting as an MCP Server. It wraps [kukapay/freqtrade-mcp](https://github.com/kukapay/freqtrade-mcp) and exposes Freqtrade's API as Model Context Protocol (MCP) tools over HTTP.
 3.  **The Strategist (AEGIS Brain):** A Python application acting as an **MCP Client**. It periodically fetches market context via the Bridge, consults Google Gemini for a risk assessment, and stores decisions in a local SQLite database.
+4.  **Operation EVO (Evolution Engine):** A module within the Strategist that autonomously analyzes, mutates, and improves the trading strategy.
 
-### New Feature: Closed-Loop Memory Reinforcement
-The Strategist now possesses a "BankMemory" that allows it to learn from past decisions:
+### New Feature: Operation EVO (Self-Evolving Strategy)
+The system now includes an autonomous evolution cycle that runs weekly:
+1.  **Analyze:** Queries the Freqtrade database to identify performance weaknesses (e.g., low win rate, high drawdown).
+2.  **Mutate:** Uses Google Gemini to generate a *new* candidate strategy code (`BBRSI_Candidate.py`) designed to fix the identified weaknesses.
+3.  **Backtest:** Uses the Docker SDK to trigger a backtest of the candidate strategy within the Freqtrade container.
+4.  **Deploy:** (Safety Mode) Compares the candidate's performance against the current strategy. *Currently in safety mode: logs results but does not auto-swap.*
+
+### Feature: Closed-Loop Memory Reinforcement
+The Strategist possesses a "BankMemory" that allows it to learn from past decisions:
 -   **Market Snapshots:** Before every decision, the context and the AI's reasoning are saved.
 -   **Reconciliation:** The system periodically checks for closed trades and links them back to the original prediction.
--   **RAG (Retrieval-Augmented Generation):** When making a new decision, the Brain retrieves similar past scenarios (e.g., "RSI_HIGH" conditions) and sees whether its past advice led to a Profit or Loss.
+-   **RAG (Retrieval-Augmented Generation):** When making a new decision, the Brain retrieves similar past scenarios and sees whether its past advice led to a Profit or Loss.
 
 ## 2. Hardware Setup (Raspberry Pi 4)
 
@@ -105,7 +114,7 @@ project_aegis/
 │   ├── brain.py          # Main logic loop
 │   ├── config.yaml       # Configuration (Thresholds, Schedule)
 │   ├── memory_manager.py # SQLite Database Manager
-│   ├── strategy_evolver.py # Evolution Engine
+│   ├── strategy_evolver.py # Operation EVO (Evolution Engine)
 │   ├── tests/            # Unit Tests
 │   ├── Dockerfile        # Container definition
 │   └── requirements.txt  # Python dependencies
@@ -114,6 +123,7 @@ project_aegis/
 │       └── strategies/
 │           └── BBRSI_Optimized.py # Custom Strategy
 ├── mcp_wrapper/          # The Bridge (Kukapay Integration)
+│   ├── main.py           # FastAPI MCP Server
 │   └── Dockerfile        # Clones and builds kukapay/freqtrade-mcp
 ├── scripts/              # Maintenance scripts
 │   ├── setup_pi.sh       # Automated setup script
