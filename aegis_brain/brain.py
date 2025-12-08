@@ -68,7 +68,22 @@ class MCPClient:
                 "arguments": arguments
             }
             resp = requests.post(f"{self.base_url}/tools/call", json=payload)
-            return resp.json()
+            data = resp.json()
+            
+            # MCP returns a list of content objects, e.g., [{"type": "text", "text": "..."}]
+            if isinstance(data, list) and len(data) > 0:
+                # Try to find the first text content
+                for item in data:
+                    if isinstance(item, dict) and item.get("type") == "text":
+                        content_text = item.get("text", "")
+                        try:
+                            # Try to parse the inner JSON string from Freqtrade
+                            return json.loads(content_text)
+                        except json.JSONDecodeError:
+                            # If not JSON, return the raw text
+                            return content_text
+            
+            return data
         except Exception as e:
             logger.error(f"Failed to call tool {tool_name}: {e}")
             raise e
@@ -248,7 +263,13 @@ class AegisStrategist:
             logger.error(f"Reconciliation failed: {e}")
 
         # 1. Fetch Technical Context via MCP
-        status = self.mcp.call_tool("fetch_bot_status") or {"status": "unknown"}
+        status = self.mcp.call_tool("fetch_bot_status")
+        
+        # Ensure status is a dictionary
+        if not isinstance(status, dict):
+            logger.warning(f"fetch_bot_status returned non-dict: {status}")
+            status = {"status": "unknown", "raw": str(status)}
+            
         # Mocking technical score for MVP logic (In real app, derive from indicators)
         # 1.0 = Buy, -1.0 = Sell
         tech_score = 0.5 # Neutral-Bullish assumption

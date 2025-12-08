@@ -40,9 +40,9 @@ services:
         max-file: "3"
     environment:
       - TZ=${TZ:-UTC}
-      - FREQTRADE_API_URL=${FREQTRADE_API_URL}
-      - FREQTRADE_USERNAME=${FREQTRADE_USERNAME}
-      - FREQTRADE_PASSWORD=${FREQTRADE_PASSWORD}
+      - FREQTRADE_API_URL=${FREQTRADE_API_URL:-http://freqtrade:8080}
+      - FREQTRADE_USERNAME=${FREQTRADE_USERNAME:-freqtrader}
+      - FREQTRADE_PASSWORD=${FREQTRADE_PASSWORD:-maceda}
     depends_on:
       - freqtrade
 
@@ -53,7 +53,7 @@ services:
     networks:
       - trading_net
     volumes:
-      - ./aegis_brain/memory.db:/aegis_brain/memory.db
+      - ./aegis_brain/memory.db:/app/memory.db
       - /var/run/docker.sock:/var/run/docker.sock
       - ./freqtrade/user_data:/freqtrade/user_data
     logging:
@@ -64,6 +64,6 @@ services:
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - TZ=${TZ:-UTC}
-      - MCP_SERVER_URL=http://0.0.0.0:8000
+      - MCP_SERVER_URL=http://mcp_wrapper:8000
     depends_on:
       - mcp_wrapper

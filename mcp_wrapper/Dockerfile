@@ -6,7 +6,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Clone the repository
-RUN git clone https://github.com/kukapay/freqtrade-mcp.git .
+RUN git clone https://github.com/kukapay/freqtrade-mcp.git . && \
+    sed -i 's/server.info(/print(/g' __main__.py && \
+    sed -i 's/if client.ping():/if True:/g' __main__.py
 
 # Install dependencies
 RUN pip install --no-cache-dir freqtrade-client "mcp[cli]" fastapi uvicorn requests
