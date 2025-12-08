@@ -53,7 +53,7 @@ services:
     networks:
       - trading_net
     volumes:
-      - ./aegis_brain/memory.db:/app/memory.db
+      - ./aegis_brain/memory.db:/aegis_brain/memory.db
       - /var/run/docker.sock:/var/run/docker.sock
       - ./freqtrade/user_data:/freqtrade/user_data
     logging:
@@ -64,6 +64,6 @@ services:
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - TZ=${TZ:-UTC}
-      - MCP_SERVER_URL=http://mcp_wrapper:8000
+      - MCP_SERVER_URL=http://0.0.0.0:8000
     depends_on:
       - mcp_wrapper

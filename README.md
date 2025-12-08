@@ -55,41 +55,58 @@ The Strategist now possesses a "BankMemory" that allows it to learn from past de
 
 ## 3. Deployment
 
-1.  **Clone the Repository:**
+### Option A: Automated Setup (Recommended for Pi)
+We provide a script to automate the installation of Docker, ZRAM, and directory setup.
+
+1.  **Clone and Setup:**
     ```bash
     git clone <repo_url> project_aegis
     cd project_aegis
+    chmod +x scripts/setup_pi.sh
+    sudo ./scripts/setup_pi.sh
     ```
+    *Reboot your Pi after setup.*
 
 2.  **Configuration:**
-    Copy the example environment file and edit it with your keys.
-    ```bash
-    cp .env.example .env
-    nano .env
-    ```
-    *   Set `GEMINI_API_KEY`
-    *   Set Exchange credentials
-    *   Set `FT_USER` and `FT_PASSWORD` (Must match Freqtrade config)
+    - Copy `.env.example` to `.env` and fill in your API keys.
+    - Review `aegis_brain/config.yaml` to tune trading thresholds and weights.
 
 3.  **Launch:**
     ```bash
     docker compose up -d
     ```
-    *Note: The `mcp_wrapper` container will clone and build the Kukapay repository on first launch.*
 
-4.  **Verify:**
-    Check the logs to ensure all services are running correctly.
+4.  **Updates:**
+    To pull the latest code and restart:
     ```bash
-    docker compose logs -f
+    chmod +x scripts/update.sh
+    ./scripts/update.sh
     ```
 
-## 4. Project Structure
+### Option B: Manual Setup
+Follow the "Prerequisites" section above, then run `docker compose up -d`.
+
+## 4. Testing & Verification
+
+To verify the system logic (unit tests):
+```bash
+# Install dependencies
+pip install -r aegis_brain/requirements.txt
+
+# Run tests
+python3 -m unittest discover aegis_brain/tests
+```
+
+## 5. Project Structure
 
 ```
 project_aegis/
 ├── aegis_brain/          # The Strategist (MCP Client + LLM Logic)
-│   ├── brain.py          # Main logic loop (Reconciliation + RAG)
+│   ├── brain.py          # Main logic loop
+│   ├── config.yaml       # Configuration (Thresholds, Schedule)
 │   ├── memory_manager.py # SQLite Database Manager
+│   ├── strategy_evolver.py # Evolution Engine
+│   ├── tests/            # Unit Tests
 │   ├── Dockerfile        # Container definition
 │   └── requirements.txt  # Python dependencies
 ├── freqtrade/            # The Pilot (Trading Bot)
@@ -99,12 +116,14 @@ project_aegis/
 ├── mcp_wrapper/          # The Bridge (Kukapay Integration)
 │   └── Dockerfile        # Clones and builds kukapay/freqtrade-mcp
 ├── scripts/              # Maintenance scripts
+│   ├── setup_pi.sh       # Automated setup script
+│   └── update.sh         # Update script
 ├── docker-compose.yml    # Orchestration
 ├── .env.example          # Config template
 └── .gitignore            # Git configuration
 ```
 
-## 5. Security Notes
+## 6. Security Notes
 - **Network:** All containers communicate via an internal bridge network (`trading_net`). Only ports 8080 (Freqtrade UI) and 8000 (MCP Server) are exposed to the host.
 - **Logs:** Docker logging is limited to 10MB per container to prevent SSD wear.
 - **Secrets:** Never commit `.env` or `user_data/config.json` to version control.

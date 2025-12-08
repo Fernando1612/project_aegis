@@ -2,37 +2,89 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import os
 import logging
+import asyncio
+from contextlib import asynccontextmanager
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="AEGIS Bridge (MCP Server)", version="0.1.0")
+# Configuration
+FREQTRADE_API_URL = os.getenv("FREQTRADE_API_URL", "http://freqtrade:8080")
+FREQTRADE_USERNAME = os.getenv("FREQTRADE_USERNAME", "freqtrader")
+FREQTRADE_PASSWORD = os.getenv("FREQTRADE_PASSWORD", "SuperSecretPassword")
 
-class EmergencyTrigger(BaseModel):
-    reason: str
-    severity: str
+# Global session
+session: ClientSession | None = None
+server_params = StdioServerParameters(
+    command="python",
+    args=["__main__.py"], # Run the entry point directly
+    env={
+        "FREQTRADE_API_URL": FREQTRADE_API_URL,
+        "FREQTRADE_USERNAME": FREQTRADE_USERNAME,
+        "FREQTRADE_PASSWORD": FREQTRADE_PASSWORD,
+        **os.environ
+    }
+)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting MCP Bridge...")
+    # We can't easily keep a persistent stdio connection in a simple variable 
+    # because stdio_client is a context manager.
+    # For this MVP, we might need to connect per request or use a long-running task.
+    # However, stdio_client is designed to be used with 'async with'.
+    # Let's try to keep it open.
+    yield
+    # Shutdown
+    logger.info("Shutting down MCP Bridge...")
+
+app = FastAPI(title="AEGIS Bridge (MCP Server)", version="0.2.0", lifespan=lifespan)
+
+class ToolCall(BaseModel):
+    name: str
+    arguments: dict = {}
 
 @app.get("/")
 async def root():
-    return {"status": "online", "service": "AEGIS Bridge"}
+    return {"status": "online", "service": "AEGIS Bridge", "target": FREQTRADE_API_URL}
 
-@app.post("/trigger_emergency")
-async def trigger_emergency(trigger: EmergencyTrigger):
-    """
-    Mock endpoint to trigger emergency actions in Freqtrade.
-    In a real scenario, this would call the Freqtrade API.
-    """
-    logger.warning(f"EMERGENCY TRIGGERED: {trigger.reason} (Severity: {trigger.severity})")
-    
-    # Mock logic: Assume we successfully contacted Freqtrade
-    # In production: requests.post(f"{FREQTRADE_URL}/api/v1/forceexit", ...)
-    
-    return {
-        "status": "success",
-        "action": "force_exit_all",
-        "details": f"Triggered by {trigger.reason}"
-    }
+@app.get("/tools")
+async def list_tools():
+    try:
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tools = await session.list_tools()
+                # Convert to simple list of dicts for brain.py
+                return [
+                    {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "inputSchema": tool.inputSchema
+                    } for tool in tools.tools
+                ]
+    except Exception as e:
+        logger.error(f"Error listing tools: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/tools/call")
+async def call_tool(call: ToolCall):
+    try:
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.call_tool(call.name, arguments=call.arguments)
+                # Result is a CallToolResult object
+                # brain.py expects a JSON response, maybe just the content?
+                # Let's return the content list
+                return result.content
+    except Exception as e:
+        logger.error(f"Error calling tool {call.name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
