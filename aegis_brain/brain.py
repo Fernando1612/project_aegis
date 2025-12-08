@@ -4,8 +4,10 @@ import time
 import json
 import requests
 import yaml
-import google.generativeai as genai
-from datetime import datetime, timedelta
+from google import genai
+from google.genai import types
+
+from datetime import datetime, timedelta, timezone
 from memory_manager import MemoryManager
 from strategy_evolver import EvolutionEngine
 
@@ -26,7 +28,6 @@ def load_config(config_path="config.yaml"):
         return {}
 
 CONFIG = load_config()
-
 
 def retry_operation(max_retries=3, delay=2):
     def decorator(func):
@@ -90,24 +91,23 @@ class MCPClient:
 
 class GeminiClient:
     """
-    Wrapper for Google Gemini API with Search Grounding.
+    Wrapper for Google GenAI SDK v2.
     """
     def __init__(self, api_key):
         self.api_key = api_key
         if not api_key:
             logger.warning("GEMINI_API_KEY not set. Running in mock mode.")
         else:
-            genai.configure(api_key=api_key)
-            # Initialize model with search tools
-            self.model = genai.GenerativeModel('gemini-pro', tools='google_search_retrieval')
+            self.client = genai.Client(api_key=api_key)
+            self.model_name = "gemini-2.5-flash"
+            logger.info(f"Initialized Gemini Client (v2) for model: {self.model_name}")
 
     @retry_operation(max_retries=3, delay=5)
     def analyze_macro_context(self) -> dict:
         """
         Performs a grounded search for macro-economic and crypto news.
-        Returns a sentiment score (-1.0 to 1.0) and a risk flag.
         """
-        if not hasattr(self, 'model'):
+        if not hasattr(self, 'client'):
             return {"score": 0.0, "risk_event": False, "reasoning": "Mock Mode"}
 
         prompt = """
@@ -118,14 +118,21 @@ class GeminiClient:
 
         Analyze the search results and provide a JSON response with:
         - "sentiment_score": A float between -1.0 (Very Bearish) and 1.0 (Very Bullish).
-        - "risk_event": Boolean. True ONLY if there is a MAJOR catastrophic event (e.g., Binance hack, War, US ban on crypto).
+        - "risk_event": Boolean. True ONLY if there is a MAJOR catastrophic event.
         - "reasoning": A brief summary of why.
         """
         
+        # New SDK Tool Configuration
+        tool = types.Tool(google_search=types.GoogleSearch())
+        config = types.GenerateContentConfig(tools=[tool])
+
         try:
-            response = self.model.generate_content(prompt)
-            # Simple parsing logic (In prod, use structured output or robust parsing)
-            # Assuming LLM returns JSON string block
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=config
+            )
+            
             text = response.text
             # Strip markdown code blocks if present
             if "```json" in text:
@@ -145,8 +152,7 @@ class GeminiClient:
         """
         Sends market context to Gemini and gets a strategic assessment.
         """
-        # Mock response for MVP if model not init
-        if not hasattr(self, 'model'):
+        if not hasattr(self, 'client'):
             return "MARKET_RISK_LOW: Proceed with standard strategy."
             
         prompt = f"""
@@ -161,7 +167,10 @@ class GeminiClient:
         Analyze the situation and provide a recommendation.
         """
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
             return response.text
         except Exception as e:
             logger.error(f"Market analysis failed: {e}")
@@ -238,14 +247,19 @@ class AegisStrategist:
         """
         Checks if it's time to run Operation EVO (Sunday 02:00 UTC).
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         # 6 = Sunday. Hour = 2.
         evo_day = CONFIG.get('evolution_day', 6)
         evo_hour = CONFIG.get('evolution_hour', 2)
         
         if now.weekday() == evo_day and now.hour == evo_hour:
             # Ensure we only run once per week (check if we ran in the last hour)
-            if now - self.last_evolution_check > timedelta(hours=1):
+            # Make last_evolution_check timezone aware if likely naive (assuming init was now())
+            last_check = self.last_evolution_check
+            if last_check.tzinfo is None:
+                last_check = last_check.replace(tzinfo=timezone.utc)
+                
+            if now - last_check > timedelta(hours=1):
                 logger.info("SCHEDULE TRIGGER: Running Operation EVO...")
                 self.evolver.run_evolution_cycle()
                 self.last_evolution_check = now
@@ -276,7 +290,7 @@ class AegisStrategist:
         
         # 2. Fetch Macro Context via Gemini Search
         macro_data = self.gemini.analyze_macro_context()
-        macro_score = macro_data.get("score", 0.0)
+        macro_score = macro_data.get("sentiment_score", 0.0)
         risk_event = macro_data.get("risk_event", False)
         
         # 3. Circuit Breaker

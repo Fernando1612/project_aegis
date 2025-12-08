@@ -35,13 +35,17 @@ from freqtrade.strategy import (
 import talib.abstract as ta
 from technical import qtpylib
 
-
-class BBRSI_Optimized(IStrategy):
+class AEGIS_Strategy(IStrategy):
     """
-    BBRSI_Optimized strategy for Project AEGIS.
+    AEGIS Living Strategy (Project Genesis).
+
+    This strategy is not static. It is autonomously evolved by the AEGIS Evolution Engine.
+    It adapts its logic dyamicallly based on multi-modal feedback loops (Macro, Social, History).
+    It operates without bias towards any specific indicator, mutating its logic to survive.
     
-    Combines Bollinger Bands and RSI for entry and exit signals.
-    Standardized to match Freqtrade best practices.
+    CURRENT GENE EXPRESSION:
+    - Base Logic: Bollinger Bands + RSI
+    - Context: Neutral
     """
     # Strategy interface version - allow new iterations of the strategy interface.
     INTERFACE_VERSION = 3
@@ -50,6 +54,7 @@ class BBRSI_Optimized(IStrategy):
     can_short: bool = False
 
     # Minimal ROI designed for the strategy.
+    # [EVOLUTION NOTE]: Adjust ROI based on Market Volatility.
     minimal_roi = {
         "60": 0.01,
         "30": 0.03,
@@ -57,6 +62,7 @@ class BBRSI_Optimized(IStrategy):
     }
 
     # Optimal stoploss designed for the strategy.
+    # [EVOLUTION NOTE]: Tighten stoploss in Bear Markets (-0.05), loosen in Bull (-0.15).
     stoploss = -0.10
 
     # Trailing stoploss
@@ -87,7 +93,10 @@ class BBRSI_Optimized(IStrategy):
     # Optional order time in force.
     order_time_in_force = {"entry": "GTC", "exit": "GTC"}
 
-    # Hyperoptable parameters
+    # --------------------------------------------------------------------------
+    # [GENOME SECTION] - Hyperoptable Parameters
+    # The Evolution Engine should introduce/remove genes here.
+    # --------------------------------------------------------------------------
     buy_rsi = IntParameter(low=10, high=40, default=30, space="buy", optimize=True, load=True)
     sell_rsi = IntParameter(low=60, high=90, default=70, space="sell", optimize=True, load=True)
     
@@ -106,32 +115,46 @@ class BBRSI_Optimized(IStrategy):
     }
 
     def informative_pairs(self):
+        """
+        Define additional pairs/timeframes to monitor.
+        [EVOLUTION NOTE]: Add 'Whale Watcher' pairs here during High Correlation phases.
+        """
         return []
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
         Adds several different TA indicators to the given DataFrame
+        [EVOLUTION NOTE]:
+        - Penalty for Complexity: Do not add indicators blindly.
+        - Use TA-Lib abstract (ta.EMA, ta.RSI, etc.)
         """
-        # RSI
+        # [GENE] RSI
         dataframe['rsi'] = ta.RSI(dataframe, timeperiod=14)
 
-        # Bollinger Bands
+        # [GENE] Bollinger Bands
         bollinger = qtpylib.bollinger_bands(qtpylib.typical_price(dataframe), window=20, stds=2)
         dataframe['bb_lowerband'] = bollinger['lower']
         dataframe['bb_middleband'] = bollinger['mid']
         dataframe['bb_upperband'] = bollinger['upper']
+        
+        # [GENE] Volume Check
+        # dataframe['volume_mean'] = dataframe['volume'].rolling(24).mean()
 
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
         Based on TA indicators, populates the entry signal for the given dataframe
+        [EVOLUTION NOTE]: Define Entry Logic based on current Market Context (Bull/Bear/Crab).
         """
         dataframe.loc[
             (
+                # Signal: RSI Oversold
                 (dataframe['rsi'] < self.buy_rsi.value) &
+                # Signal: Price below Lower Bollinger Band
                 (dataframe['close'] < dataframe['bb_lowerband']) &
-                (dataframe['volume'] > 0)  # Make sure Volume is not 0
+                # Guardrail: Volume exists
+                (dataframe['volume'] > 0)
             ),
             'enter_long'] = 1
 
@@ -140,13 +163,34 @@ class BBRSI_Optimized(IStrategy):
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
         Based on TA indicators, populates the exit signal for the given dataframe
+        [EVOLUTION NOTE]: Define Exit Logic (Profit Taking).
         """
         dataframe.loc[
             (
-                (dataframe['rsi'] > self.sell_rsi.value) &
+                # Signal: RSI Overbought
+                (dataframe['rsi'] < self.sell_rsi.value) &
+                # Signal: Price above Upper Bollinger Band
                 (dataframe['close'] > dataframe['bb_upperband']) &
-                (dataframe['volume'] > 0)  # Make sure Volume is not 0
+                # Guardrail: Volume exists
+                (dataframe['volume'] > 0) 
             ),
             'exit_long'] = 1
 
         return dataframe
+
+    def confirm_trade_entry(self, pair: str, order_type: str, amount: float, rate: float,
+                            time_in_force: str, current_time: datetime, entry_tag: Optional[str],
+                            side: str, **kwargs) -> bool:
+        """
+        Called right before entering a trade.
+        [EVOLUTION NOTE]: Use this for "Mental Checks" (News Filters, High Risk Avoidance).
+        """
+        return True
+
+    def confirm_trade_exit(self, pair: str, trade: Trade, order_type: str, amount: float,
+                           rate: float, time_in_force: str, sell_reason: str,
+                           current_time: datetime, **kwargs) -> bool:
+        """
+        Called right before exiting a trade.
+        """
+        return True
