@@ -51,7 +51,7 @@ graph TD
     end
 
     subgraph Execution [The Muscle]
-        Commander -- "Long/Short/Hold" --> Pilot[Freqtrade (Futures)]
+        Commander -- "Long/Short/Hold" --> Pilot[Freqtrade - Futures]
         Commander -- "Emergency Hedge" --> Shield[Delta Neutral Shield]
     end
 ```

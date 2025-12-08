@@ -51,7 +51,7 @@ graph TD
     end
 
     subgraph Execution [El Músculo]
-        Commander -- "Largo/Corto/Mantener" --> Pilot[Freqtrade (Futuros)]
+        Commander -- "Largo/Corto/Mantener" --> Pilot[Freqtrade - Futuros]
         Commander -- "Cobertura de Emergencia" --> Shield[Escudo Delta Neutral]
     end
 ```
