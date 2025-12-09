@@ -47,3 +47,4 @@ mcp_wrapper/freqtrade-mcp/
 # IDEs
 .vscode/
 .idea/
+.DS_Store

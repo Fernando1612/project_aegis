@@ -127,7 +127,8 @@ class EvolutionManager:
         # For now, I'll use the user's workspace path for file operations if running locally.
         
         # adjusting paths for local execution based on previous file exploration
-        local_base_path = "/Users/fernandomaceda/.gemini/antigravity/scratch/project_aegis/freqtrade/user_data"
+        # adjusting paths for container execution
+        local_base_path = "/freqtrade/user_data"
         real_strategy_path = os.path.join(local_base_path, "strategies", f"{self.current_strategy_name}.py")
         
         if not os.path.exists(real_strategy_path):

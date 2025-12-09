@@ -44,7 +44,14 @@ evolution_hour: 2
 
 # System Settings
 # Time in seconds between cycles
-cycle_interval: 300
+# OPTIMIZED FOR FREE TIER: 20 Requests Per Day = 1 request every ~75 minutes (4500s)
+cycle_interval: 4500 
 # Time in seconds to wait on error
-error_interval: 60
+error_interval: 300
+
+rate_limits:
+  max_rpm: 5
+  max_tpm: 250000
+  max_rpd: 20
+  provider: "gemini_free_tier"
 

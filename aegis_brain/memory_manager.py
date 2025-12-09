@@ -47,6 +47,18 @@ class MemoryManager:
             )
         ''')
         
+        # Table C: strategy_evolution (The Labs)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS strategy_evolution (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                strategy_name TEXT,
+                metrics_json TEXT,
+                passed_validation BOOLEAN,
+                rejection_reason TEXT
+            )
+        ''')
+        
         conn.commit()
         conn.close()
 
@@ -129,6 +141,34 @@ class MemoryManager:
                WHERE market_tag = ? AND is_reconciled = 1 
                ORDER BY id DESC LIMIT ?''',
             (tag, limit)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return rows
+
+    def store_evolution_attempt(self, strategy_name: str, metrics: dict, passed: bool, reason: str):
+        """Stores the result of a strategy evolution cycle."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''INSERT INTO strategy_evolution 
+               (timestamp, strategy_name, metrics_json, passed_validation, rejection_reason) 
+               VALUES (?, ?, ?, ?, ?)''',
+            (datetime.now().isoformat(), strategy_name, json.dumps(metrics), passed, reason)
+        )
+        conn.commit()
+        conn.close()
+        logger.info(f"Evolution attempt stored: {strategy_name} Passed={passed}")
+
+    def get_evolution_history(self, limit=5):
+        """Fetches recent evolution attempts to inform the LLM."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''SELECT strategy_name, metrics_json, passed_validation, rejection_reason 
+               FROM strategy_evolution 
+               ORDER BY id DESC LIMIT ?''',
+            (limit,)
         )
         rows = cursor.fetchall()
         conn.close()

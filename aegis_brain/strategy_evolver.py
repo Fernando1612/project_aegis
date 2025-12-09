@@ -12,6 +12,8 @@ from google.genai import types
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("AEGIS_Evolver")
 
+from memory_manager import MemoryManager
+
 class EvolutionEngine:
     """
     The "Operation EVO" engine.
@@ -24,12 +26,28 @@ class EvolutionEngine:
             self.model_name = "gemini-2.5-flash"
         
         # Connect to Docker Daemon (requires /var/run/docker.sock mounted)
+        try:
+            self.docker_client = docker.from_env()
+        except Exception as e:
+            logger.error(f"Failed to connect to Docker: {e}")
+            self.docker_client = None
+
+        # Paths (Shared Volume)
+        # adjusting paths for container execution
+        self.local_base_path = "/freqtrade/user_data"
+        self.strategies_path = os.path.join(self.local_base_path, "strategies")
+        self.db_path = os.path.join(self.local_base_path, "tradesv3.sqlite")
+        self.current_strategy = "AEGIS_Strategy"
+        self.candidate_strategy = "AEGIS_Strategy_Candidate"
+        
+        # Initialize Memory
+        self.memory = MemoryManager()
 
     # ... (analyze_current_performance remains)
 
     def generate_candidate_strategy(self, analysis_summary: str):
         """
-        Uses Gemini to write a new strategy file based on analysis.
+        Uses Gemini to write a new strategy file based on analysis and past attempts.
         """
         logger.info("Generating candidate strategy...")
         current_file = os.path.join(self.strategies_path, f"{self.current_strategy}.py")
@@ -41,6 +59,15 @@ class EvolutionEngine:
         with open(current_file, 'r') as f:
             code_content = f.read()
 
+        # Fetch Evolution History for Context
+        history = self.memory.get_evolution_history(limit=3)
+        history_context = ""
+        if history:
+            history_context = "\nPAST EVOLUTION ATTEMPTS (LEARN FROM THESE):\n"
+            for attempt in history:
+                name, metrics, passed, reason = attempt
+                history_context += f"- Strategy: {name} | Result: {metrics} | Promoted: {passed} | Barrier: {reason}\n"
+
         prompt = f"""
         You are a Python Expert specializing in Freqtrade.
         
@@ -51,6 +78,8 @@ class EvolutionEngine:
         
         PERFORMANCE ANALYSIS:
         {analysis_summary}
+        
+        {history_context}
         
         TASK:
         1. Identify weaknesses in the code based on the analysis.
@@ -91,46 +120,113 @@ class EvolutionEngine:
     def run_backtest_gauntlet(self) -> dict:
         """
         Triggers a backtest in the Freqtrade container.
+        Workflow: Download Data -> Backtest -> Parse Results -> Cleanup
         """
         logger.info("Running backtest gauntlet...")
         if not self.docker_client:
             return {}
 
+        results = {"profit": 0.0, "drawdown": 0.0, "win_rate": 0.0, "total_trades": 0}
+
         try:
             container = self.docker_client.containers.get('aegis_pilot')
             
-            # Backtest Candidate (Last 30 days)
-            # Note: This command assumes freqtrade is in path inside container
-            cmd = f"freqtrade backtesting --strategy {self.candidate_strategy} --timerange=20240101- --days 30"
+            # 1. Download Data (Binance, 30 days)
+            # Using config.json inside container to determine pairs if possible, otherwise hardcoded default for MVP
+            logger.info("Step 1: Downloading historical data...")
+            dl_cmd = "freqtrade download-data --config /freqtrade/user_data/config.json --days 30 -t 5m"
+            dl_log = container.exec_run(dl_cmd)
+            if dl_log.exit_code != 0:
+                logger.error(f"Data download failed: {dl_log.output.decode('utf-8')}")
+                # Fallback to simple download if config fails
+                container.exec_run("freqtrade download-data --exchange binance --days 30 -t 5m")
+
+            # 2. Backtest Candidate
+            logger.info("Step 2: Running Backtest...")
+            # We use --export=json to get machine-readable results
+            bt_cmd = f"freqtrade backtesting --strategy {self.candidate_strategy} --timerange=20240101- --days 30 --export=json --export-filename=user_data/backtest_results/backtest-result.json"
             
-            exec_log = container.exec_run(cmd)
+            exec_log = container.exec_run(bt_cmd)
             output = exec_log.output.decode('utf-8')
+            logger.info(f"Backtest Output Snippet: {output[:200]}...")
+
+            # 3. Parse Results (Read JSON from shared volume)
+            # The file is inside the container at /freqtrade/user_data/backtest_results/backtest-result.json
+            # Use docker exec to cat the file content
+            json_cmd = "cat /freqtrade/user_data/backtest_results/backtest-result.json"
+            json_log = container.exec_run(json_cmd)
             
-            # Parse output (Simplified for MVP - Real implementation needs robust parsing)
-            # We look for "Total profit %" or similar in the text output
-            logger.info(f"Backtest Output (Snippet): {output[:500]}")
+            if json_log.exit_code == 0:
+                try:
+                    bt_data = json.loads(json_log.output.decode('utf-8'))
+                    strategy_stats = bt_data['strategy'][self.candidate_strategy]
+                    
+                    results['profit'] = strategy_stats['total_profit']
+                    results['drawdown'] = strategy_stats['max_drawdown_account']
+                    # Calculate Win Rate from wins/draws/losses
+                    results['total_trades'] = strategy_stats['total_trades']
+                    wins = strategy_stats['wins']
+                    results['win_rate'] = (wins / results['total_trades']) if results['total_trades'] > 0 else 0.0
+                    
+                    logger.info(f"Backtest Metrics: {results}")
+                except Exception as parse_e:
+                    logger.error(f"Failed to parse backtest JSON: {parse_e}")
+            else:
+                 logger.error("Backtest JSON file not found.")
+
+            # 4. Cleanup Data & Results (To save space as requested)
+            logger.info("Step 3: Cleanup...")
+            container.exec_run("rm -rf /freqtrade/user_data/data/binance")
+            container.exec_run("rm -rf /freqtrade/user_data/backtest_results/*")
             
-            # Mocking result parsing for MVP stability
-            # In production, we would parse the JSON output if we added --export=json
-            return {"profit": 0.0, "drawdown": 0.0} 
+            return results
             
         except Exception as e:
-            logger.error(f"Backtest failed: {e}")
-            return {}
+            logger.error(f"Backtest process failed: {e}")
+            return results
 
     def hot_swap_strategy(self, candidate_metrics: dict, current_metrics: dict):
         """
-        Deploys the candidate if it beats the current strategy.
+        Deploys the candidate if it passes strict validation KPIs.
+        KPIs: Profit > 5%, Drawdown < 10%, Trades >= 10.
         """
-        # MVP Logic: Always fail for safety until robust parsing is in place
-        logger.info("Comparing strategies...")
-        logger.info("Candidate did not exceed performance threshold (Safety Mode).")
+        profit = candidate_metrics.get('profit', 0.0)
+        drawdown = candidate_metrics.get('drawdown', 0.0)
+        trades = candidate_metrics.get('total_trades', 0)
         
-        # Cleanup
-        candidate_file = os.path.join(self.strategies_path, f"{self.candidate_strategy}.py")
-        if os.path.exists(candidate_file):
-            os.remove(candidate_file)
-            logger.info("Candidate file removed.")
+        # Validation Logic
+        passed = False
+        reason = "Metrics too low"
+        
+        if profit > 0.05 and drawdown < 0.10 and trades >= 10:
+            passed = True
+            reason = "KPIs Met: Promoting Strategy"
+            logger.info("🚀 SUCCESS: Candidate promoted! (Profit > 5%, DD < 10%, Trades >= 10)")
+            # In a real autonomy scenario, we would rename the file here. 
+            # For now, we leave it as Candidate for human final approval.
+        else:
+            if trades < 10:
+                reason = f"Insufficient Trades ({trades} < 10)"
+            elif profit <= 0.05:
+                reason = f"Low Profit ({profit:.2%} <= 5%)"
+            elif drawdown >= 0.10:
+                reason = f"High Drawdown ({drawdown:.2%} >= 10%)"
+                
+            logger.info(f"❌ REJECTED: {reason}")
+            
+            # Cleanup failed candidate
+            candidate_file = os.path.join(self.strategies_path, f"{self.candidate_strategy}.py")
+            if os.path.exists(candidate_file):
+                os.remove(candidate_file)
+                logger.info("failed Candidate file removed.")
+
+        # Store Result in Memory
+        self.memory.store_evolution_attempt(
+            strategy_name=self.candidate_strategy,
+            metrics=candidate_metrics,
+            passed=passed,
+            reason=reason
+        )
 
     def run_evolution_cycle(self):
         """
