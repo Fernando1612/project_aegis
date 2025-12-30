@@ -15,19 +15,19 @@ En lugar de pedirle a una IA que "adivine" parámetros numéricos (lo cual hacen
 graph TD
     subgraph "Nube & Contexto"
         Gemini((Google Gemini)) 
-        MarketData[Datos de Mercado ((Binance))]
+        MarketData[Datos de Mercado - Binance]
     end
 
-    subgraph "AEGIS Brain (Raspberry Pi)"
+    subgraph "AEGIS Brain - Raspberry Pi"
         direction TB
         
-        Context[Análisis de Contexto] -->|Prompt| Architect[EL ARQUITECTO<br>((Lógica Cualitativa))]
+        Context[Análisis de Contexto] -->|Prompt| Architect[EL ARQUITECTO<br>-Lógica Cualitativa]
         Gemini <--> Architect
         
-        Architect -->|Plantilla de Estrategia| Engineer[EL INGENIERO<br>((Optimización Cuantitativa))]
+        Architect -->|Plantilla de Estrategia| Engineer[EL INGENIERO<br>-Optimización Cuantitativa]
         
         subgraph "Ingeniería Genética"
-            Engineer -->|NSGA-II| Backtester[Backtester Vectorizado<br>((pandas/numpy))]
+            Engineer -->|NSGA-II| Backtester[Backtester Vectorizado<br>-pandas/numpy]
             Backtester -->|Profit / Drawdown| Engineer
         end
         
@@ -35,8 +35,8 @@ graph TD
     end
 
     subgraph "Ejecución"
-        Compiler -->|Hot Swap| Pilot[Freqtrade ((El Piloto))]
-        Pilot -->|Buy/Sell| Exchange((Exchange))
+        Compiler -->|Hot Swap| Pilot[Freqtrade - El Piloto]
+        Pilot -->|Buy/Sell| Exchange -Exchange
     end
 ```
 
