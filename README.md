@@ -36,8 +36,9 @@ graph TD
 
     subgraph "Ejecución"
         Compiler -->|Hot Swap| Pilot[Freqtrade - El Piloto]
-        Pilot -->|Buy/Sell| Exchange -Exchange
+        Pilot -->|Buy/Sell| Exchange((Exchange))
     end
+
 ```
 
 ### Componentes Clave
