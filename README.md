@@ -1,89 +1,60 @@
-# Proyecto AEGIS: Sistema Híbrido de Trading Algorítmico (v2.2)
+# Proyecto AEGIS: Sistema Híbrido Neuro-Genético (v3.0)
 
 > **[Read in English](README_EN.md)**
 
-**Proyecto AEGIS** es un sistema de trading de bajos recursos y alta autonomía diseñado para la Raspberry Pi 4. Implementa una arquitectura "Piloto vs. Estratega" donde un bot de trading determinista (El Piloto) es guiado por un gestor de riesgos impulsado por LLM (El Estratega), y ahora cuenta con un motor de estrategia auto-evolutivo ("Operación EVO").
+**Proyecto AEGIS** es un sistema de trading avanzado diseñado para hardware de bajos recursos (ej. Raspberry Pi 4). Evolucionando más allá de la IA generativa simple, AEGIS v3.0 implementa una **Arquitectura Neuro-Genética** que separa la creatividad cualitativa de la optimización cuantitativa.
 
-## 1. Resumen de la Arquitectura
+## 1. Resumen de la Arquitectura (v3.0)
 
-### Arquitectura Actual (v2.2)
-El sistema actual opera con un solo agente estratega y un motor de evolución.
-
-```mermaid
-graph TD
-    subgraph Hardware [Raspberry Pi 4 8GB RAM]
-        subgraph Docker_Network [Red Interna: trading_net]
-            Pilot[Freqtrade - El Piloto] -- "Ejecuta Operaciones" --> Exchange((Exchange))
-            Pilot -- "API" --> Bridge
-            Bridge[MCP Wrapper - Kukapay Freqtrade MCP] -- "Expone Herramientas (HTTP)" --> Strategist
-            Strategist[AEGIS Brain - El Estratega] -- "Cliente MCP" --> Bridge
-            Strategist -- "Contexto/Evolución" --> Gemini((Google Gemini))
-            Strategist -- "Almacenar/Recordar" --> Memory[SQLite BankMemory]
-            Strategist -- "Muta" --> PilotStrategy[Archivo de Estrategia]
-        end
-    end
-```
-
-### Arquitectura Futura (Modo Bestia - En Desarrollo)
-El sistema está evolucionando hacia un motor de decisión Multi-Agente ("The War Room") con ingestión de datos externos.
+### La Filosofía: Arquitecto vs. Ingeniero
+En lugar de pedirle a una IA que "adivine" parámetros numéricos (lo cual hacen mal), AEGIS divide el trabajo:
+1.  **El Arquitecto (Gemini):** Diseña la *lógica* de la estrategia (indicadores, condiciones de entrada/salida) y crea una plantilla con variables.
+2.  **El Ingeniero (Algoritmos Genéticos):** Utiliza optimización multi-objetivo (NSGA-II) para encontrar matemáticamente los parámetros óptimos para esas variables.
 
 ```mermaid
 graph TD
-    subgraph External_Data [Los Ojos]
-        Whale[Whale Watcher] -- "Flujos On-Chain" --> WarRoom
-        Social[Sentiment Sniper] -- "Puntuación de Hype" --> WarRoom
-        Market[Datos de Mercado] -- "Precio/Indicadores" --> WarRoom
+    subgraph "Nube & Contexto"
+        Gemini((Google Gemini)) 
+        MarketData[Datos de Mercado (Binance)]
     end
 
-    subgraph The_War_Room [El Cerebro]
+    subgraph "AEGIS Brain (Raspberry Pi)"
         direction TB
-        Bull[Agente Alfa: El Toro]
-        Bear[Agente Beta: El Oso]
-        Risk[Agente Gamma: Juez de Riesgo]
         
-        Whale & Social & Market --> Bull & Bear & Risk
+        Context[Análisis de Contexto] -->|Prompt| Architect[EL ARQUITECTO<br>(Lógica Cualitativa)]
+        Gemini <--> Architect
         
-        Bull -- "Voto" --> Voting[Mecanismo de Votación]
-        Bear -- "Voto" --> Voting
-        Risk -- "Voto" --> Voting
+        Architect -->|Plantilla de Estrategia| Engineer[EL INGENIERO<br>(Optimización Cuantitativa)]
         
-        Voting -- "Veredicto Final" --> Commander[Comandante Supremo]
+        subgraph "Ingeniería Genética"
+            Engineer -->|NSGA-II| Backtester[Backtester Vectorizado<br>(pandas/numpy)]
+            Backtester -->|Profit / Drawdown| Engineer
+        end
+        
+        Engineer -->|Estrategia Optimizada| Compiler[Compilador]
     end
 
-    subgraph Execution [El Músculo]
-        Commander -- "Largo/Corto/Mantener" --> Pilot[Freqtrade - Futuros]
-        Commander -- "Cobertura de Emergencia" --> Shield[Escudo Delta Neutral]
+    subgraph "Ejecución"
+        Compiler -->|Hot Swap| Pilot[Freqtrade (El Piloto)]
+        Pilot -->|Buy/Sell| Exchange((Exchange))
     end
 ```
 
-### Componentes
-1.  **El Piloto (Freqtrade):** Ejecuta la estrategia `BBRSI_Optimized`. Maneja la ejecución minuto a minuto de las operaciones.
-2.  **El Puente (MCP Wrapper):** Una aplicación FastAPI en contenedor que actúa como un Servidor MCP. Envuelve [kukapay/freqtrade-mcp](https://github.com/kukapay/freqtrade-mcp) y expone la API de Freqtrade como herramientas del Protocolo de Contexto de Modelo (MCP) a través de HTTP.
-3.  **El Estratega (AEGIS Brain):** Una aplicación Python que actúa como un **Cliente MCP**. Periódicamente obtiene el contexto del mercado a través del Puente, consulta a Google Gemini para una evaluación de riesgos y almacena las decisiones en una base de datos SQLite local.
-4.  **Operación EVO (Motor de Evolución):** Un módulo dentro del Estratega que analiza, muta y mejora autónomamente la estrategia de trading.
-
-### Nueva Característica: Operación EVO (Estrategia Auto-Evolutiva)
-El sistema ahora incluye un ciclo de evolución autónomo que se ejecuta semanalmente:
-1.  **Analizar:** Consulta la base de datos de Freqtrade para identificar debilidades de rendimiento (por ejemplo, baja tasa de victorias, alta reducción).
-2.  **Mutar:** Utiliza Google Gemini para generar un *nuevo* código de estrategia candidata (`BBRSI_Candidate.py`) diseñado para corregir las debilidades identificadas.
-3.  **Backtest:** Utiliza el SDK de Docker para activar un backtest de la estrategia candidata dentro del contenedor de Freqtrade.
-4.  **Desplegar:** (Modo de Seguridad) Compara el rendimiento de la candidata con la estrategia actual. *Actualmente en modo de seguridad: registra los resultados pero no realiza el cambio automático.*
-
-### Característica: Refuerzo de Memoria de Bucle Cerrado
-El Estratega posee una "BankMemory" que le permite aprender de decisiones pasadas:
--   **Instantáneas del Mercado:** Antes de cada decisión, se guardan el contexto y el razonamiento de la IA.
--   **Conciliación:** El sistema verifica periódicamente las operaciones cerradas y las vincula con la predicción original.
--   **RAG (Generación Aumentada por Recuperación):** Al tomar una nueva decisión, el Cerebro recupera escenarios pasados similares y ve si su consejo anterior condujo a una Ganancia o Pérdida.
+### Componentes Clave
+1.  **El Piloto (Freqtrade):** Ejecuta la estrategia final de manera determinista, minuto a minuto.
+2.  **El Arquitecto (Módulo GenAI):** Un agente de IA que observa el mercado (Tendencia, Volatilidad) y escribe código Python *incompleto* (plantillas) adaptado al clima actual.
+3.  **El Ingeniero (Módulo Pymoo):** Un optimizador genético que ejecuta miles de simulaciones rápidas para llenar los huecos de la plantilla con los números perfectos.
+4.  **Backtester Vectorizado:** Un motor de simulación ultrarrápido escrito en `pandas` y `numpy` que permite correr 10,000 pruebas en minutos en una Raspberry Pi.
 
 ## 2. Configuración de Hardware (Raspberry Pi 4)
 
 ### Requisitos Previos
-- Raspberry Pi 4 (se recomiendan 4GB u 8GB)
-- SSD conectado vía USB 3.0 (no se recomiendan tarjetas MicroSD para operaciones de base de datos)
+- Raspberry Pi 4 (8GB recomendada para compilación genética)
+- SSD conectado vía USB 3.0 (Crítico para lectura de datos)
 - Raspberry Pi OS (64-bit)
 
 ### Pasos de Optimización
-1.  **Habilitar ZRAM:** Para optimizar el uso de memoria en la Pi.
+1.  **Habilitar ZRAM:** Para optimizar el uso de memoria RAM durante la evolución genética.
     ```bash
     sudo apt install zram-tools
     echo "PERCENT=50" | sudo tee -a /etc/default/zramswap
@@ -94,14 +65,11 @@ El Estratega posee una "BankMemory" que le permite aprender de decisiones pasada
     curl -fsSL https://get.docker.com -o get-docker.sh
     sudo sh get-docker.sh
     sudo usermod -aG docker $USER
-    sudo apt install -y docker-compose-plugin
     ```
 
 ## 3. Despliegue
 
-### Opción A: Configuración Automatizada (Recomendada para Pi)
-Proporcionamos un script para automatizar la instalación de Docker, ZRAM y la configuración de directorios.
-
+### Configuración Automatizada
 1.  **Clonar y Configurar:**
     ```bash
     git clone <repo_url> project_aegis
@@ -112,66 +80,48 @@ Proporcionamos un script para automatizar la instalación de Docker, ZRAM y la c
     *Reinicia tu Pi después de la configuración.*
 
 2.  **Configuración:**
-    - Copia `.env.example` a `.env` y completa tus claves API.
-    - Revisa `aegis_brain/config.yaml` para ajustar los umbrales de trading y los pesos.
+    - Copia `.env.example` a `.env` y completa tu `GEMINI_API_KEY`.
+    - Asegúrate de tener datos históricos descargados en `freqtrade/user_data/data/binance`.
 
 3.  **Lanzamiento:**
     ```bash
-    docker compose up -d
+    docker-compose up -d --build
     ```
+    *Nota: El flag `--build` es necesario la primera vez para instalar las nuevas dependencias (pymoo, pandas).*
 
-4.  **Actualizaciones:**
-    Para obtener el código más reciente y reiniciar:
-    ```bash
-    chmod +x scripts/update.sh
-    ./scripts/update.sh
-    ```
+## 4. Flujo de Trabajo Neuro-Genético
+El sistema opera en un ciclo continuo (por defecto semanal o manual):
 
-### Opción B: Configuración Manual
-Sigue la sección "Requisitos Previos" anterior, luego ejecuta `docker compose up -d`.
-
-## 4. Pruebas y Verificación
-
-Para verificar la lógica del sistema (pruebas unitarias):
-```bash
-# Instalar dependencias
-pip install -r aegis_brain/requirements.txt
-
-# Ejecutar pruebas
-python3 -m unittest discover aegis_brain/tests
-```
+1.  **Análisis:** El sistema detecta "Volatilidad Alta, Tendencia Bajista".
+2.  **Diseño:** El Arquitecto propone: *"Usar RSI corto (periodo {x}) y rechazo de Bandas de Bollinger (std {y})"*.
+3.  **Evolución:** El Ingeniero prueba poblaciones de `{x}` y `{y}`.
+    -   Gen 1: Resultado mediocre.
+    -   Gen 10: Encuentra que `x=4` y `y=2.5` maximizan ganancia y minimizan riesgo.
+4.  **Despliegue:** Se compila `AEGIS_Strategy.py` y Freqtrade recarga la configuración automáticamente.
 
 ## 5. Estructura del Proyecto
 
 ```
 project_aegis/
-├── aegis_brain/          # El Estratega (Cliente MCP + Lógica LLM)
-│   ├── brain.py          # Bucle lógico principal
-│   ├── config.yaml       # Configuración (Umbrales, Horario)
-│   ├── memory_manager.py # Gestor de Base de Datos SQLite
-│   ├── strategy_evolver.py # Operación EVO (Motor de Evolución)
-│   ├── tests/            # Pruebas Unitarias
-│   ├── Dockerfile        # Definición del contenedor
-│   └── requirements.txt  # Dependencias de Python
-├── freqtrade/            # El Piloto (Bot de Trading)
+├── aegis_brain/          # El Cerebro Neuro-Genético
+│   ├── modules/
+│   │   ├── architect.py  # Diseñador (Gemini)
+│   │   ├── engineer.py   # Optimizador (Pymoo)
+│   │   └── backtester.py # Motor Vectorizado
+│   ├── strategy_evolver.py # Orquestador del ciclo
+│   ├── brain.py          # Bucle principal
+│   └── requirements.txt  # pymoo, pandas, numpy, etc.
+├── freqtrade/            # El Cuerpo (Ejecución)
 │   └── user_data/
 │       └── strategies/
-│           └── BBRSI_Optimized.py # Estrategia Personalizada
-├── mcp_wrapper/          # El Puente (Integración Kukapay)
-│   ├── main.py           # Servidor MCP FastAPI
-│   └── Dockerfile        # Clona y construye kukapay/freqtrade-mcp
-├── scripts/              # Scripts de mantenimiento
-│   ├── setup_pi.sh       # Script de configuración automatizada
-│   └── update.sh         # Script de actualización
-├── docker-compose.yml    # Orquestación
-├── .env.example          # Plantilla de configuración
-└── .gitignore            # Configuración de Git
+│           └── AEGIS_Strategy.py # Resultado final compilado
+├── mcp_wrapper/          # Puente MCP (Opcional en v3.0)
+└── docker-compose.yml    # Orquestación
 ```
 
 ## 6. Notas de Seguridad
--   **Red:** Todos los contenedores se comunican a través de una red puente interna (`trading_net`). Solo los puertos 8080 (UI de Freqtrade) y 8000 (Servidor MCP) están expuestos al host.
--   **Logs:** El registro de Docker está limitado a 10MB por contenedor para prevenir el desgaste del SSD.
--   **Secretos:** Nunca confirmes `.env` o `user_data/config.json` en el control de versiones.
+-   **Sin Alucinaciones Numéricas:** Al usar un optimizador matemático para los números, eliminamos el riesgo de que la IA invente parámeteros perdedores.
+-   **Validación Estricta:** El Ingeniero penaliza duramente las estrategias con pocas operaciones o Drawdown excesivo.
 
 ---
 *Generado por Antigravity para Proyecto AEGIS*

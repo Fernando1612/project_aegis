@@ -1,4 +1,3 @@
-
 {
     "$schema": "https://schema.freqtrade.io/schema.json",
     "max_open_trades": 3,
@@ -36,17 +35,37 @@
         "name": "binance",
         "key": "",
         "secret": "",
-         "ccxt_config": {"enableRateLimit": true},
+        "ccxt_config": {
+            "enableRateLimit": true
+        },
         "ccxt_async_config": {},
-        "pair_whitelist": [
-            "BTC/USDT:USDT"
+        "pairlists": [
+            {
+                "method": "VolumePairList",
+                "number_assets": 5,
+                "sort_key": "quoteVolume",
+                "min_value": 0,
+                "refresh_period": 1800
+            },
+            {
+                "method": "AgeFilter",
+                "min_days_listed": 14
+            },
+            {
+                "method": "SpreadFilter",
+                "max_spread_ratio": 0.005
+            },
+            {
+                "method": "ShuffleFilter",
+                "seed": 42
+            }
         ],
-        "pair_blacklist": [
-            "BNB/.*"
-        ]
+        "pair_blacklist": []
     },
     "pairlists": [
-        {"method": "StaticPairList"}
+        {
+            "method": "StaticPairList"
+        }
     ],
     "telegram": {
         "enabled": false,
